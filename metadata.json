@@ -1,0 +1,6 @@
+{
+  "name": "Wedding Fatiha Invitation & Video Studio",
+  "description": "Luxury animated wedding invitation video for Hassan & Aisha with custom text replacement, background audio & sound upload, and AI video analysis powered by Gemini 3.1 Pro.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
