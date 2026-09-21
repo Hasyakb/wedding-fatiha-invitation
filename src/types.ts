@@ -18,7 +18,10 @@ export type CalligraphyBgPreset =
   | 'amberGlow'
   | 'custom';
 
+export type AspectRatioType = '9:16' | '16:9' | '1:1';
+
 export interface InvitationData {
+  aspectRatio?: AspectRatioType;
   templateStyle?: InvitationTemplateStyle;
   calligraphyBgPreset?: CalligraphyBgPreset;
   calligraphyBgOpacity?: number; // 0.15 to 0.75, default ~0.38
