@@ -15,7 +15,7 @@ import {
   Layers,
   Palette,
 } from "lucide-react";
-import { InvitationData } from "./types";
+import { AspectRatioType, InvitationData } from "./types";
 import { InvitationVideoPlayer } from "./components/InvitationVideoPlayer";
 import { TextCustomizer } from "./components/TextCustomizer";
 import { GeminiVideoAnalyzer } from "./components/GeminiVideoAnalyzer";
@@ -29,6 +29,7 @@ import { DEFAULT_BRIDE_PHOTO, DEFAULT_GROOM_PHOTO } from "./components/GoldenBok
 
 const DEFAULT_INVITATION_DATA: InvitationData = {
   templateStyle: "goldenBokeh",
+  aspectRatio: "9:16",
   bridePhotoUrl: DEFAULT_BRIDE_PHOTO,
   groomPhotoUrl: DEFAULT_GROOM_PHOTO,
   goldenBokehQuoteTitle: "A TRUE Love Story NEVER ENDS",
@@ -111,6 +112,17 @@ export default function App() {
     window.open(url, "_blank");
   };
 
+  const handleAspectRatioChange = (ratio: AspectRatioType) => {
+    setInvitationData((prev) => ({
+      ...prev,
+      aspectRatio: ratio,
+    }));
+    showToast(`Aspect ratio set to ${ratio}`);
+  };
+
+  const isLandscape = invitationData.aspectRatio === "16:9";
+  const isSquare = invitationData.aspectRatio === "1:1";
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#141210] via-[#100e0d] to-[#0a0908] text-[#f7f3eb] flex flex-col justify-between">
       {/* Top Navigation Bar */}
@@ -156,8 +168,8 @@ export default function App() {
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* LEFT COLUMN: Vertical Video Player & Animation Stage */}
-          <div className="lg:col-span-5 flex flex-col items-center">
+          {/* LEFT COLUMN: Vertical / Widescreen Video Player & Animation Stage */}
+          <div className={`${isLandscape ? "lg:col-span-7" : isSquare ? "lg:col-span-6" : "lg:col-span-5"} flex flex-col items-center transition-all duration-300`}>
             {/* Quick Template Switcher Pills */}
             <div className="w-full flex items-center justify-between gap-1.5 p-1.5 mb-3 rounded-2xl bg-[#1c1713] border border-[#35291e] shadow-sm">
               <button
@@ -206,7 +218,7 @@ export default function App() {
             <div className="w-full flex items-center justify-between mb-2.5 px-2">
               <div className="flex items-center gap-1.5 text-xs text-[#d5c5b2] font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Live Video Preview (9:16)
+                Live Video Preview ({invitationData.aspectRatio || "9:16"})
               </div>
               <div className="text-[11px] text-[#998776]">
                 {invitationData.templateStyle === "goldenBokeh"
@@ -222,6 +234,7 @@ export default function App() {
               onShareClick={handleWhatsAppShare}
               onDownloadClick={() => setIsDownloadModalOpen(true)}
               onAudioClick={() => setActiveTab("music")}
+              onAspectRatioChange={handleAspectRatioChange}
             />
 
             {/* Quick Backdrop Switcher for Calligraphy Pen & Golden Bokeh Templates */}
@@ -239,7 +252,7 @@ export default function App() {
           </div>
 
           {/* RIGHT COLUMN: Tab Navigation & Tools */}
-          <div className="lg:col-span-7 space-y-4">
+          <div className={`${isLandscape ? "lg:col-span-5" : isSquare ? "lg:col-span-6" : "lg:col-span-7"} space-y-4 transition-all duration-300`}>
             {/* Tab Selector Buttons */}
             <div className="flex flex-wrap items-center p-1 rounded-xl bg-[#1d1814] border border-[#30261c] text-xs gap-1">
               <button
@@ -478,6 +491,7 @@ export default function App() {
         isOpen={isDownloadModalOpen}
         onClose={() => setIsDownloadModalOpen(false)}
         data={invitationData}
+        onAspectRatioChange={handleAspectRatioChange}
       />
 
       {/* Toast Notification Banner */}
