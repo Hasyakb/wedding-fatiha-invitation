@@ -13,8 +13,12 @@ import {
   Play,
   Music,
   Upload,
+  Maximize2,
+  Square,
+  Smartphone,
+  Tv,
 } from "lucide-react";
-import { InvitationData } from "../types";
+import { AspectRatioType, InvitationData } from "../types";
 import {
   exportInvitationVideo,
   getSupportedVideoMimeType,
@@ -25,12 +29,14 @@ interface VideoDownloadModalProps {
   isOpen: boolean;
   onClose: () => void;
   data: InvitationData;
+  onAspectRatioChange?: (ratio: AspectRatioType) => void;
 }
 
 export const VideoDownloadModal: React.FC<VideoDownloadModalProps> = ({
   isOpen,
   onClose,
   data,
+  onAspectRatioChange,
 }) => {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -48,6 +54,8 @@ export const VideoDownloadModal: React.FC<VideoDownloadModalProps> = ({
   const [completedFile, setCompletedFile] = useState<string | null>(null);
   const [completedUrl, setCompletedUrl] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<number>(fullDuration);
+  const [selectedRatio, setSelectedRatio] = useState<AspectRatioType>(data.aspectRatio || "9:16");
+  const [resolution, setResolution] = useState<"1080p" | "720p">("1080p");
   const [includeAudio, setIncludeAudio] = useState(true);
   const [currentTrackName, setCurrentTrackName] = useState(weddingAudio.getTrackName());
   const [uploadingAudio, setUploadingAudio] = useState(false);
@@ -57,20 +65,45 @@ export const VideoDownloadModal: React.FC<VideoDownloadModalProps> = ({
 
   const { extension } = getSupportedVideoMimeType();
 
+  const handleRatioSelect = (ratio: AspectRatioType) => {
+    setSelectedRatio(ratio);
+    onAspectRatioChange?.(ratio);
+  };
+
+  // Calculate export resolution based on ratio
+  let exportW = 1080;
+  let exportH = 1920;
+  if (selectedRatio === "16:9") {
+    exportW = resolution === "1080p" ? 1920 : 1280;
+    exportH = resolution === "1080p" ? 1080 : 720;
+  } else if (selectedRatio === "1:1") {
+    exportW = resolution === "1080p" ? 1080 : 720;
+    exportH = resolution === "1080p" ? 1080 : 720;
+  } else {
+    exportW = resolution === "1080p" ? 1080 : 720;
+    exportH = resolution === "1080p" ? 1920 : 1280;
+  }
+
   const handleStartExport = async () => {
     setExporting(true);
     setProgress(0);
-    setStageText("Initializing video canvas...");
+    setStageText(`Initializing ${selectedRatio} canvas (${exportW}x${exportH})...`);
     setCompletedFile(null);
     setCompletedUrl(null);
 
     try {
-      const result = await exportInvitationVideo(data, {
+      const exportData: InvitationData = {
+        ...data,
+        aspectRatio: selectedRatio,
+      };
+
+      const result = await exportInvitationVideo(exportData, {
         duration: selectedDuration,
-        width: 720,
-        height: 1280,
+        width: exportW,
+        height: exportH,
         fps: 30,
         includeAudio,
+        aspectRatio: selectedRatio,
         onProgress: (p, text) => {
           setProgress(p);
           setStageText(text);
@@ -91,115 +124,117 @@ export const VideoDownloadModal: React.FC<VideoDownloadModalProps> = ({
     }
   };
 
-  // Instant PNG card download
+  // Instant PNG card download - adapts mathematically to 16:9, 1:1, or 9:16
   const handleDownloadPng = () => {
+    const W = selectedRatio === "16:9" ? 1920 : 1080;
+    const H = selectedRatio === "16:9" ? 1080 : selectedRatio === "1:1" ? 1080 : 1920;
     const canvas = document.createElement("canvas");
-    canvas.width = 1080;
-    canvas.height = 1920;
+    canvas.width = W;
+    canvas.height = H;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Elegant background
-    const grad = ctx.createLinearGradient(0, 0, 0, 1920);
+    // Elegant background gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, "#fcf9f2");
     grad.addColorStop(0.5, "#f6efe3");
     grad.addColorStop(1, "#eee4d2");
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 1080, 1920);
+    ctx.fillRect(0, 0, W, H);
 
-    // Gold borders
+    // Adaptive scale & centering calculations
+    const scale = selectedRatio === "16:9" ? 0.90 : selectedRatio === "1:1" ? 0.94 : 1.0;
+    const cx = W / 2;
+    // For 9:16 reference center is ~960; in 16:9 or 1:1 shift vertically so content is centered
+    const yCenterRef = 960 * scale;
+    const yOff = (H / 2) - yCenterRef;
+
+    // Outer and inner gold borders
     ctx.strokeStyle = "#c5a059";
-    ctx.lineWidth = 14;
-    ctx.strokeRect(40, 40, 1000, 1840);
+    ctx.lineWidth = 12 * scale;
+    const pad = 36 * scale;
+    ctx.strokeRect(pad, pad, W - pad * 2, H - pad * 2);
+
     ctx.strokeStyle = "#e8d8b5";
-    ctx.lineWidth = 3;
-    ctx.strokeRect(60, 60, 960, 1800);
+    ctx.lineWidth = 3 * scale;
+    const pad2 = 54 * scale;
+    ctx.strokeRect(pad2, pad2, W - pad2 * 2, H - pad2 * 2);
 
-    // Text
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#8a6d3b";
-    ctx.font = "italic 36px 'Cormorant Garamond', serif";
-    ctx.fillText(data.bismillahText, 540, 240);
-
-    ctx.font = "600 32px 'Cinzel', serif";
-    ctx.letterSpacing = "6px";
-    ctx.fillStyle = "#5c4825";
-    ctx.fillText(data.familyIntro, 540, 360);
-
-    ctx.font = "italic 44px 'Cormorant Garamond', serif";
-    ctx.fillStyle = "#2d2416";
-    ctx.fillText(data.familyLateFather, 540, 440);
-    ctx.font = "32px 'Cinzel', serif";
-    ctx.fillText("AND", 540, 500);
-    ctx.font = "italic 44px 'Cormorant Garamond', serif";
-    ctx.fillText(data.familySecondFather, 540, 560);
-
-    ctx.font = "italic 36px 'Cormorant Garamond', serif";
-    ctx.fillStyle = "#7a633d";
-    ctx.fillText(data.invitationPhrase, 540, 660);
-
-    ctx.font = "700 82px 'Alex Brush', cursive";
-    ctx.fillStyle = "#b38938";
-    ctx.fillText(data.eventHeading, 540, 780);
-
-    ctx.font = "500 30px 'Cinzel', serif";
-    ctx.fillStyle = "#6e5730";
-    ctx.fillText(data.childrenPhrase, 540, 860);
-
-    ctx.font = "700 68px 'Cormorant Garamond', serif";
-    ctx.fillStyle = "#1e1810";
-    ctx.fillText(data.groomName, 540, 980);
-    if (data.groomNick) {
-      ctx.font = "italic 38px 'Cormorant Garamond', serif";
-      ctx.fillStyle = "#7a633d";
-      ctx.fillText(`(${data.groomNick})`, 540, 1035);
-    }
-
-    ctx.font = "italic 52px 'Alex Brush', cursive";
-    ctx.fillStyle = "#c5a059";
-    ctx.fillText("&", 540, 1110);
-
-    ctx.font = "700 68px 'Cormorant Garamond', serif";
-    ctx.fillStyle = "#1e1810";
-    ctx.fillText(data.brideName, 540, 1200);
-    if (data.brideNick) {
-      ctx.font = "italic 38px 'Cormorant Garamond', serif";
-      ctx.fillStyle = "#7a633d";
-      ctx.fillText(`(${data.brideNick})`, 540, 1255);
-    }
-
-    ctx.strokeStyle = "#c5a059";
-    ctx.lineWidth = 2;
+    // Central watermark rosette
+    ctx.save();
+    ctx.translate(cx, H / 2);
+    ctx.strokeStyle = "rgba(197, 160, 89, 0.12)";
+    ctx.lineWidth = 2.5 * scale;
     ctx.beginPath();
-    ctx.moveTo(340, 1330);
-    ctx.lineTo(740, 1330);
+    ctx.arc(0, 0, 240 * scale, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let i = 0; i < 8; i++) {
+      const ang = (i * Math.PI * 2) / 8;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(ang) * 240 * scale, Math.sin(ang) * 240 * scale);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Helper for rendering centered text
+    const drawText = (
+      text: string,
+      yRef: number,
+      fontStr: string,
+      fillColor: string,
+      letterSpacing?: number
+    ) => {
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.fillStyle = fillColor;
+      ctx.font = fontStr;
+      if (letterSpacing && "letterSpacing" in ctx) {
+        // @ts-ignore
+        ctx.letterSpacing = `${letterSpacing * scale}px`;
+      }
+      ctx.fillText(text, cx, yRef * scale + yOff);
+      ctx.restore();
+    };
+
+    drawText(data.bismillahText, 240, `italic ${Math.round(36 * scale)}px 'Cormorant Garamond', serif`, "#8a6d3b");
+    drawText(data.familyIntro, 350, `600 ${Math.round(30 * scale)}px 'Cinzel', serif`, "#5c4825", 5);
+    drawText(data.familyLateFather, 430, `italic ${Math.round(42 * scale)}px 'Cormorant Garamond', serif`, "#2d2416");
+    drawText("AND", 490, `600 ${Math.round(28 * scale)}px 'Cinzel', serif`, "#5c4825", 4);
+    drawText(data.familySecondFather, 550, `italic ${Math.round(42 * scale)}px 'Cormorant Garamond', serif`, "#2d2416");
+    drawText(data.invitationPhrase, 645, `italic ${Math.round(34 * scale)}px 'Cormorant Garamond', serif`, "#7a633d");
+
+    drawText(data.eventHeading, 765, `700 ${Math.round(80 * scale)}px 'Alex Brush', cursive`, "#b38938");
+    drawText(data.childrenPhrase, 845, `500 ${Math.round(28 * scale)}px 'Cinzel', serif`, "#6e5730", 3);
+
+    // Groom & Bride
+    const groomTitle = data.groomNick ? `${data.groomName} (${data.groomNick})` : data.groomName;
+    drawText(groomTitle, 960, `700 ${Math.round(62 * scale)}px 'Cormorant Garamond', serif`, "#1e1810");
+    drawText("&", 1030, `italic ${Math.round(52 * scale)}px 'Alex Brush', cursive`, "#c5a059");
+    const brideTitle = data.brideNick ? `${data.brideName} (${data.brideNick})` : data.brideName;
+    drawText(brideTitle, 1110, `700 ${Math.round(62 * scale)}px 'Cormorant Garamond', serif`, "#1e1810");
+
+    // Divider line
+    ctx.strokeStyle = "#c5a059";
+    ctx.lineWidth = 2 * scale;
+    ctx.beginPath();
+    ctx.moveTo(cx - 200 * scale, 1180 * scale + yOff);
+    ctx.lineTo(cx + 200 * scale, 1180 * scale + yOff);
     ctx.stroke();
 
-    ctx.font = "600 36px 'Cinzel', serif";
-    ctx.fillStyle = "#2d2416";
-    ctx.fillText(data.eventDate.toUpperCase(), 540, 1390);
-    ctx.font = "500 32px 'Cinzel', serif";
-    ctx.fillText(`TIME: ${data.eventTime}`, 540, 1445);
+    drawText(data.eventDate.toUpperCase(), 1240, `600 ${Math.round(34 * scale)}px 'Cinzel', serif`, "#2d2416", 2);
+    drawText(`TIME: ${data.eventTime}`, 1295, `500 ${Math.round(30 * scale)}px 'Cinzel', serif`, "#2d2416", 2);
+    drawText(data.venueAddress, 1370, `400 ${Math.round(32 * scale)}px 'Cormorant Garamond', serif`, "#473922");
+    drawText(data.receptionNote, 1435, `italic ${Math.round(30 * scale)}px 'Cormorant Garamond', serif`, "#8a6d3b");
 
-    ctx.font = "400 34px 'Cormorant Garamond', serif";
-    ctx.fillStyle = "#473922";
-    ctx.fillText(data.venueAddress, 540, 1530);
+    drawText("RSVP", 1520, `600 ${Math.round(26 * scale)}px 'Cinzel', serif`, "#6e5730", 4);
+    drawText(data.rsvpNumbers.join("  •  "), 1565, `400 ${Math.round(28 * scale)}px 'Montserrat', sans-serif`, "#2d2416");
 
-    ctx.font = "italic 32px 'Cormorant Garamond', serif";
-    ctx.fillStyle = "#8a6d3b";
-    ctx.fillText(data.receptionNote, 540, 1600);
-
-    ctx.font = "600 28px 'Cinzel', serif";
-    ctx.fillStyle = "#6e5730";
-    ctx.fillText("RSVP", 540, 1690);
-    ctx.font = "400 30px 'Montserrat', sans-serif";
-    ctx.fillStyle = "#2d2416";
-    ctx.fillText(data.rsvpNumbers.join("  •  "), 540, 1740);
-
+    const ratioLabel = selectedRatio.replace(":", "x");
     const url = canvas.toDataURL("image/png");
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Wedding_Fatiha_Invitation_Card_${data.groomName.split(" ")[0]}_and_${data.brideName.split(" ")[0]}.png`;
+    a.download = `Wedding_Fatiha_Invitation_Card_${ratioLabel}_${data.groomName.split(" ")[0]}_and_${data.brideName.split(" ")[0]}.png`;
     a.click();
   };
 
@@ -288,8 +323,108 @@ export const VideoDownloadModal: React.FC<VideoDownloadModalProps> = ({
           {/* Export Options & Settings */}
           {!exporting && (
             <div className="space-y-4">
-              <label className="text-xs font-semibold text-[#ddcebc] block">
-                Select Video Format & Length
+              {/* Aspect Ratio Selector (9:16, 1:1, 16:9) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#ddcebc] block">
+                    Aspect Ratio & Canvas Size
+                  </label>
+                  <span className="text-[11px] text-[#c5a059] font-mono">
+                    {exportW} × {exportH} px
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {/* 9:16 Vertical Story */}
+                  <button
+                    type="button"
+                    onClick={() => handleRatioSelect("9:16")}
+                    className={`p-3 rounded-xl border text-left transition-all flex flex-col items-center justify-center gap-1.5 ${
+                      selectedRatio === "9:16"
+                        ? "bg-[#2b2219] border-[#c5a059] shadow-md shadow-[#c5a059]/15 text-[#faeedd]"
+                        : "bg-[#1d1813] border-[#382a1d] text-[#a89582] hover:border-[#523e2b]"
+                    }`}
+                  >
+                    <div className="w-5 h-8 border-2 border-current rounded-sm flex items-center justify-center">
+                      <Smartphone className="w-3 h-3" />
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs font-bold leading-tight">9:16</div>
+                      <div className="text-[10px] text-[#8e7b68] leading-tight">Story / Reel</div>
+                    </div>
+                  </button>
+
+                  {/* 1:1 Square Feed */}
+                  <button
+                    type="button"
+                    onClick={() => handleRatioSelect("1:1")}
+                    className={`p-3 rounded-xl border text-left transition-all flex flex-col items-center justify-center gap-1.5 ${
+                      selectedRatio === "1:1"
+                        ? "bg-[#2b2219] border-[#c5a059] shadow-md shadow-[#c5a059]/15 text-[#faeedd]"
+                        : "bg-[#1d1813] border-[#382a1d] text-[#a89582] hover:border-[#523e2b]"
+                    }`}
+                  >
+                    <div className="w-6 h-6 border-2 border-current rounded-sm flex items-center justify-center">
+                      <Square className="w-3 h-3" />
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs font-bold leading-tight">1:1</div>
+                      <div className="text-[10px] text-[#8e7b68] leading-tight">Square Post</div>
+                    </div>
+                  </button>
+
+                  {/* 16:9 Cinema Widescreen */}
+                  <button
+                    type="button"
+                    onClick={() => handleRatioSelect("16:9")}
+                    className={`p-3 rounded-xl border text-left transition-all flex flex-col items-center justify-center gap-1.5 ${
+                      selectedRatio === "16:9"
+                        ? "bg-[#2b2219] border-[#c5a059] shadow-md shadow-[#c5a059]/15 text-[#faeedd]"
+                        : "bg-[#1d1813] border-[#382a1d] text-[#a89582] hover:border-[#523e2b]"
+                    }`}
+                  >
+                    <div className="w-8 h-5 border-2 border-current rounded-sm flex items-center justify-center">
+                      <Tv className="w-3 h-3" />
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs font-bold leading-tight">16:9</div>
+                      <div className="text-[10px] text-[#8e7b68] leading-tight">Widescreen / TV</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quality & Resolution Selection */}
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#201913] border border-[#36271a] text-xs">
+                <span className="text-[#c7b5a1] font-medium">Render Quality:</span>
+                <div className="flex items-center gap-1 bg-[#15110d] p-0.5 rounded-lg border border-[#2b1f14]">
+                  <button
+                    type="button"
+                    onClick={() => setResolution("1080p")}
+                    className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                      resolution === "1080p"
+                        ? "bg-[#c5a059] text-[#1c150c] shadow-sm"
+                        : "text-[#9e8c79] hover:text-[#e4d6c4]"
+                    }`}
+                  >
+                    1080p (Full HD)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResolution("720p")}
+                    className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                      resolution === "720p"
+                        ? "bg-[#c5a059] text-[#1c150c] shadow-sm"
+                        : "text-[#9e8c79] hover:text-[#e4d6c4]"
+                    }`}
+                  >
+                    720p (Fast)
+                  </button>
+                </div>
+              </div>
+
+              <label className="text-xs font-semibold text-[#ddcebc] block pt-1">
+                Select Video Duration & Sequence
               </label>
 
               {/* Option 1: Full Animated Video */}
@@ -436,7 +571,7 @@ export const VideoDownloadModal: React.FC<VideoDownloadModalProps> = ({
                   Need a Still Image Card instead?
                 </span>
                 <p className="text-[11px] text-[#9c8a77]">
-                  Instant print-ready PNG (1080x1920)
+                  Instant print-ready PNG in {selectedRatio} ({selectedRatio === "16:9" ? "1920x1080" : selectedRatio === "1:1" ? "1080x1080" : "1080x1920"})
                 </p>
               </div>
               <button
