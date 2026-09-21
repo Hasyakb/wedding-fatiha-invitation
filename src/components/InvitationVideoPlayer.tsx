@@ -13,7 +13,7 @@ import {
   Camera,
   Music,
 } from "lucide-react";
-import { InvitationData } from "../types";
+import { AspectRatioType, InvitationData } from "../types";
 import { Butterfly3D } from "./Butterfly3D";
 import { Envelope3D } from "./Envelope3D";
 import { weddingAudio } from "../utils/audio";
@@ -30,6 +30,7 @@ interface InvitationVideoPlayerProps {
   onShareClick?: () => void;
   onDownloadClick?: () => void;
   onAudioClick?: () => void;
+  onAspectRatioChange?: (ratio: AspectRatioType) => void;
 }
 
 export const InvitationVideoPlayer: React.FC<InvitationVideoPlayerProps> = ({
@@ -37,6 +38,7 @@ export const InvitationVideoPlayer: React.FC<InvitationVideoPlayerProps> = ({
   onShareClick,
   onDownloadClick,
   onAudioClick,
+  onAspectRatioChange,
 }) => {
   const TOTAL_DURATION =
     data.templateStyle === "oliveRusticTablescape"
@@ -203,149 +205,132 @@ export const InvitationVideoPlayer: React.FC<InvitationVideoPlayerProps> = ({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Quick snapshot download of current frame as high-res PNG
+  // Quick snapshot download of current frame as high-res PNG - adapts to selected ratio
   const captureSnapshot = async () => {
     if (!videoStageRef.current) return;
     try {
-      // Use html-to-canvas style canvas drawing
-      const element = videoStageRef.current;
-      const rect = element.getBoundingClientRect();
+      const ratio = data.aspectRatio || "9:16";
+      const isLandscape = ratio === "16:9";
+      const isSquare = ratio === "1:1";
+
+      const W = isLandscape ? 1920 : 1080;
+      const H = isLandscape ? 1080 : isSquare ? 1080 : 1920;
       const canvas = document.createElement("canvas");
-      canvas.width = 1080;
-      canvas.height = 1920;
+      canvas.width = W;
+      canvas.height = H;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       // Draw elegant royal backdrop
-      const grad = ctx.createLinearGradient(0, 0, 0, 1920);
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
       grad.addColorStop(0, "#fcf9f2");
       grad.addColorStop(0.5, "#f6efe3");
       grad.addColorStop(1, "#eee4d2");
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 1080, 1920);
+      ctx.fillRect(0, 0, W, H);
+
+      const scale = isLandscape ? 0.90 : isSquare ? 0.94 : 1.0;
+      const cx = W / 2;
+      const yCenterRef = 960 * scale;
+      const yOff = (H / 2) - yCenterRef;
 
       // Royal rosette watermark behind center
       ctx.save();
-      ctx.translate(540, 960);
+      ctx.translate(cx, H / 2);
       ctx.strokeStyle = "rgba(197, 160, 89, 0.12)";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2.5 * scale;
       ctx.beginPath();
-      ctx.arc(0, 0, 360, 0, Math.PI * 2);
+      ctx.arc(0, 0, 240 * scale, 0, Math.PI * 2);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(0, 0, 260, 0, Math.PI * 2);
+      ctx.arc(0, 0, 180 * scale, 0, Math.PI * 2);
       ctx.stroke();
       for (let i = 0; i < 8; i++) {
         const ang = (i * Math.PI * 2) / 8;
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(ang) * 360, Math.sin(ang) * 360);
+        ctx.lineTo(Math.cos(ang) * 240 * scale, Math.sin(ang) * 240 * scale);
         ctx.stroke();
       }
       ctx.restore();
 
       // Gold border
+      const pad = 36 * scale;
       ctx.strokeStyle = "#c5a059";
-      ctx.lineWidth = 14;
-      ctx.strokeRect(40, 40, 1000, 1840);
+      ctx.lineWidth = 12 * scale;
+      ctx.strokeRect(pad, pad, W - pad * 2, H - pad * 2);
+      const pad2 = 54 * scale;
       ctx.strokeStyle = "#e8d8b5";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(60, 60, 960, 1800);
+      ctx.lineWidth = 3 * scale;
+      ctx.strokeRect(pad2, pad2, W - pad2 * 2, H - pad2 * 2);
 
-      // Typography
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#8a6d3b";
-      ctx.font = "italic 36px 'Cormorant Garamond', serif";
-      ctx.fillText(data.bismillahText, 540, 240);
+      // Typography helper
+      const drawText = (
+        text: string,
+        yRef: number,
+        fontStr: string,
+        fillColor: string,
+        letterSpacing?: number
+      ) => {
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.fillStyle = fillColor;
+        ctx.font = fontStr;
+        if (letterSpacing && "letterSpacing" in ctx) {
+          // @ts-ignore
+          ctx.letterSpacing = `${letterSpacing * scale}px`;
+        }
+        ctx.fillText(text, cx, yRef * scale + yOff);
+        ctx.restore();
+      };
 
-      ctx.font = "600 32px 'Cinzel', serif";
-      ctx.letterSpacing = "6px";
-      ctx.fillStyle = "#5c4825";
-      ctx.fillText(data.familyIntro, 540, 360);
+      drawText(data.bismillahText, 240, `italic ${Math.round(36 * scale)}px 'Cormorant Garamond', serif`, "#8a6d3b");
+      drawText(data.familyIntro, 350, `600 ${Math.round(30 * scale)}px 'Cinzel', serif`, "#5c4825", 5);
+      drawText(data.familyLateFather, 430, `italic ${Math.round(42 * scale)}px 'Cormorant Garamond', serif`, "#2d2416");
+      drawText("AND", 490, `600 ${Math.round(28 * scale)}px 'Cinzel', serif`, "#5c4825", 4);
+      drawText(data.familySecondFather, 550, `italic ${Math.round(42 * scale)}px 'Cormorant Garamond', serif`, "#2d2416");
+      drawText(data.invitationPhrase, 645, `italic ${Math.round(34 * scale)}px 'Cormorant Garamond', serif`, "#7a633d");
 
-      ctx.font = "italic 44px 'Cormorant Garamond', serif";
-      ctx.fillStyle = "#2d2416";
-      ctx.fillText(data.familyLateFather, 540, 440);
-      ctx.font = "32px 'Cinzel', serif";
-      ctx.fillText("AND", 540, 500);
-      ctx.font = "italic 44px 'Cormorant Garamond', serif";
-      ctx.fillText(data.familySecondFather, 540, 560);
-
-      ctx.font = "italic 36px 'Cormorant Garamond', serif";
-      ctx.fillStyle = "#7a633d";
-      ctx.fillText(data.invitationPhrase, 540, 660);
-
-      ctx.font = "700 82px 'Alex Brush', cursive";
-      ctx.fillStyle = "#b38938";
-      ctx.fillText(data.eventHeading, 540, 780);
-
-      ctx.font = "500 30px 'Cinzel', serif";
-      ctx.fillStyle = "#6e5730";
-      ctx.fillText(data.childrenPhrase, 540, 860);
+      drawText(data.eventHeading, 765, `700 ${Math.round(80 * scale)}px 'Alex Brush', cursive`, "#b38938");
+      drawText(data.childrenPhrase, 845, `500 ${Math.round(28 * scale)}px 'Cinzel', serif`, "#6e5730", 3);
 
       // Groom & Bride
-      ctx.font = "700 68px 'Cormorant Garamond', serif";
-      ctx.fillStyle = "#1e1810";
-      ctx.fillText(data.groomName, 540, 980);
-      if (data.groomNick) {
-        ctx.font = "italic 38px 'Cormorant Garamond', serif";
-        ctx.fillStyle = "#7a633d";
-        ctx.fillText(`(${data.groomNick})`, 540, 1035);
-      }
+      const groomTitle = data.groomNick ? `${data.groomName} (${data.groomNick})` : data.groomName;
+      drawText(groomTitle, 960, `700 ${Math.round(62 * scale)}px 'Cormorant Garamond', serif`, "#1e1810");
+      drawText("&", 1030, `italic ${Math.round(52 * scale)}px 'Alex Brush', cursive`, "#c5a059");
+      const brideTitle = data.brideNick ? `${data.brideName} (${data.brideNick})` : data.brideName;
+      drawText(brideTitle, 1110, `700 ${Math.round(62 * scale)}px 'Cormorant Garamond', serif`, "#1e1810");
 
-      ctx.font = "italic 52px 'Alex Brush', cursive";
-      ctx.fillStyle = "#c5a059";
-      ctx.fillText("&", 540, 1110);
-
-      ctx.font = "700 68px 'Cormorant Garamond', serif";
-      ctx.fillStyle = "#1e1810";
-      ctx.fillText(data.brideName, 540, 1200);
-      if (data.brideNick) {
-        ctx.font = "italic 38px 'Cormorant Garamond', serif";
-        ctx.fillStyle = "#7a633d";
-        ctx.fillText(`(${data.brideNick})`, 540, 1255);
-      }
-
-      // Date & Venue
+      // Divider line
       ctx.strokeStyle = "#c5a059";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * scale;
       ctx.beginPath();
-      ctx.moveTo(340, 1330);
-      ctx.lineTo(740, 1330);
+      ctx.moveTo(cx - 200 * scale, 1180 * scale + yOff);
+      ctx.lineTo(cx + 200 * scale, 1180 * scale + yOff);
       ctx.stroke();
 
-      ctx.font = "600 36px 'Cinzel', serif";
-      ctx.fillStyle = "#2d2416";
-      ctx.fillText(data.eventDate.toUpperCase(), 540, 1390);
-      ctx.font = "500 32px 'Cinzel', serif";
-      ctx.fillText(`TIME: ${data.eventTime}`, 540, 1445);
+      drawText(data.eventDate.toUpperCase(), 1240, `600 ${Math.round(34 * scale)}px 'Cinzel', serif`, "#2d2416", 2);
+      drawText(`TIME: ${data.eventTime}`, 1295, `500 ${Math.round(30 * scale)}px 'Cinzel', serif`, "#2d2416", 2);
+      drawText(data.venueAddress, 1370, `400 ${Math.round(32 * scale)}px 'Cormorant Garamond', serif`, "#473922");
+      drawText(data.receptionNote, 1435, `italic ${Math.round(30 * scale)}px 'Cormorant Garamond', serif`, "#8a6d3b");
 
-      ctx.font = "400 34px 'Cormorant Garamond', serif";
-      ctx.fillStyle = "#473922";
-      ctx.fillText(data.venueAddress, 540, 1530);
+      drawText("RSVP", 1520, `600 ${Math.round(26 * scale)}px 'Cinzel', serif`, "#6e5730", 4);
+      drawText(data.rsvpNumbers.join("  •  "), 1565, `400 ${Math.round(28 * scale)}px 'Montserrat', sans-serif`, "#2d2416");
 
-      ctx.font = "italic 32px 'Cormorant Garamond', serif";
-      ctx.fillStyle = "#8a6d3b";
-      ctx.fillText(data.receptionNote, 540, 1600);
-
-      // RSVP
-      ctx.font = "600 28px 'Cinzel', serif";
-      ctx.fillStyle = "#6e5730";
-      ctx.fillText("RSVP", 540, 1690);
-      ctx.font = "400 30px 'Montserrat', sans-serif";
-      ctx.fillStyle = "#2d2416";
-      ctx.fillText(data.rsvpNumbers.join("  •  "), 540, 1740);
-
-      // Download
+      const ratioLabel = ratio.replace(":", "x");
       const url = canvas.toDataURL("image/png");
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Wedding_Fatiha_Invitation_${data.groomName.split(" ")[0]}_and_${data.brideName.split(" ")[0]}.png`;
+      a.download = `Wedding_Fatiha_Invitation_${ratioLabel}_${data.groomName.split(" ")[0]}_and_${data.brideName.split(" ")[0]}.png`;
       a.click();
     } catch (e) {
       console.error("Capture snapshot failed", e);
     }
   };
+
+  const ratio = data.aspectRatio || "9:16";
+  const isLandscape = ratio === "16:9";
+  const isSquare = ratio === "1:1";
 
   return (
     <div
@@ -354,13 +339,91 @@ export const InvitationVideoPlayer: React.FC<InvitationVideoPlayerProps> = ({
         isFullscreen ? "fixed inset-0 z-50 bg-black p-4" : ""
       }`}
     >
-      {/* Phone Mockup Frame / 9:16 Vertical Aspect Player Container */}
-      <div className="relative w-full max-w-[390px] aspect-[9/16] rounded-3xl p-3 bg-gradient-to-b from-[#2a2622] via-[#1a1715] to-[#0f0e0d] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),0_0_0_1px_rgba(197,160,89,0.25)] flex flex-col justify-between">
-        {/* Top Phone Speaker / Camera Notch */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-4 rounded-full bg-[#12100e] flex items-center justify-center gap-2 z-40 shadow-inner">
-          <div className="w-8 h-1 rounded-full bg-[#26211c]" />
-          <div className="w-2.5 h-2.5 rounded-full bg-[#1c1712] border border-[#382f25]" />
+      {/* Aspect Ratio Switcher Bar */}
+      <div className="w-full flex items-center justify-between mb-3 px-1 gap-2">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#1b1612] border border-[#33281c] text-xs">
+          <button
+            type="button"
+            onClick={() => onAspectRatioChange?.("9:16")}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              ratio === "9:16"
+                ? "bg-[#c5a059] text-[#1a140d] shadow-sm"
+                : "text-[#a69481] hover:text-[#faeedd]"
+            }`}
+          >
+            <span>📱</span>
+            <span>9:16 Story</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onAspectRatioChange?.("1:1")}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              ratio === "1:1"
+                ? "bg-[#c5a059] text-[#1a140d] shadow-sm"
+                : "text-[#a69481] hover:text-[#faeedd]"
+            }`}
+          >
+            <span>⬛</span>
+            <span>1:1 Square</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onAspectRatioChange?.("16:9")}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              ratio === "16:9"
+                ? "bg-[#c5a059] text-[#1a140d] shadow-sm"
+                : "text-[#a69481] hover:text-[#faeedd]"
+            }`}
+          >
+            <span>🖥️</span>
+            <span>16:9 Cinema</span>
+          </button>
         </div>
+
+        <div className="text-[11px] text-[#9e8c79] font-mono hidden sm:block">
+          {isLandscape ? "1920 × 1080 (Cinema)" : isSquare ? "1080 × 1080 (Square)" : "1080 × 1920 (Story)"}
+        </div>
+      </div>
+
+      {/* Frame / Player Container adapting to aspect ratio */}
+      <div
+        className={`relative w-full ${
+          isLandscape
+            ? "max-w-[760px] aspect-[16/9] rounded-2xl"
+            : isSquare
+            ? "max-w-[460px] aspect-square rounded-2xl"
+            : "max-w-[390px] aspect-[9/16] rounded-3xl"
+        } p-3 bg-gradient-to-b from-[#2a2622] via-[#1a1715] to-[#0f0e0d] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),0_0_0_1px_rgba(197,160,89,0.25)] flex flex-col justify-between transition-all duration-300`}
+      >
+        {/* Top Notch - Only for 9:16 Vertical Phone Mockup */}
+        {!isLandscape && !isSquare && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-4 rounded-full bg-[#12100e] flex items-center justify-center gap-2 z-40 shadow-inner">
+            <div className="w-8 h-1 rounded-full bg-[#26211c]" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#1c1712] border border-[#382f25]" />
+          </div>
+        )}
+
+        {/* Top Cinema Bezel indicator for 16:9 */}
+        {isLandscape && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-2 z-40 opacity-70 pointer-events-none">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[9px] font-cinzel text-[#c5a059] tracking-widest uppercase">
+              Cinema 16:9 Display
+            </span>
+          </div>
+        )}
+
+        {/* Top Square Bezel indicator for 1:1 */}
+        {isSquare && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-2 z-40 opacity-70 pointer-events-none">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#c5a059] animate-pulse" />
+            <span className="text-[9px] font-cinzel text-[#c5a059] tracking-widest uppercase">
+              Square 1:1 Gallery
+            </span>
+          </div>
+        )}
 
         {/* Screen Bezel / Stage */}
         <div
