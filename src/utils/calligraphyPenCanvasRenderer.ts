@@ -447,7 +447,10 @@ export function renderCalligraphyPenVideoFrame(
 
       const fullMetrics = ctx.measureText(line.text);
       const startX = (W - fullMetrics.width) * 0.5;
-      const yPos = line.y * scale;
+      const isLandscape = W / H > 1.3;
+      const isSquare = Math.abs(W / H - 1) < 0.2;
+      const yOffset = isLandscape || isSquare ? H * 0.5 - 460 * scale : 0;
+      const yPos = line.y * scale + yOffset;
 
       if (lineProg >= 1) {
         // Entire line is fully drawn
@@ -478,6 +481,9 @@ export function renderCalligraphyPenVideoFrame(
   if (!hasActiveLine && activeScene) {
     let prevLine: ScriptLineDef | null = null;
     let nextLine: ScriptLineDef | null = null;
+    const isLandscape = W / H > 1.3;
+    const isSquare = Math.abs(W / H - 1) < 0.2;
+    const yOffset = isLandscape || isSquare ? H * 0.5 - 460 * scale : 0;
 
     for (let i = 0; i < activeScene.lines.length; i++) {
       if (t < activeScene.lines[i].start) {
@@ -491,13 +497,13 @@ export function renderCalligraphyPenVideoFrame(
       ctx.font = nextLine.font(scale);
       const nextMetrics = ctx.measureText(nextLine.text);
       const nextStartX = (W - nextMetrics.width) * 0.5;
-      const nextY = nextLine.y * scale - 2 * scale;
+      const nextY = nextLine.y * scale + yOffset - 2 * scale;
 
       if (prevLine) {
         ctx.font = prevLine.font(scale);
         const prevMetrics = ctx.measureText(prevLine.text);
         const prevEndX = (W - prevMetrics.width) * 0.5 + prevMetrics.width;
-        const prevY = prevLine.y * scale - 2 * scale;
+        const prevY = prevLine.y * scale + yOffset - 2 * scale;
 
         const transDuration = Math.max(0.01, nextLine.start - prevLine.end);
         const transProg = Math.min(1, Math.max(0, (t - prevLine.end) / transDuration));
