@@ -1,4 +1,4 @@
-import { InvitationData } from "../types";
+import { InvitationData, AspectRatioType } from "../types";
 import { weddingAudio } from "./audio";
 import { drawSceneMosqueShadow } from "./mosqueSilhouettes";
 import { drawRealMosqueSceneBackground } from "./realMosqueRenderer";
@@ -18,8 +18,9 @@ import {
 
 export interface VideoExportOptions {
   duration?: number; // duration in seconds (default 24s)
-  width?: number; // default 720
-  height?: number; // default 1280
+  width?: number;
+  height?: number;
+  aspectRatio?: AspectRatioType;
   fps?: number; // default 30
   includeAudio?: boolean;
   onProgress?: (progress: number, stageText: string) => void;
@@ -60,7 +61,18 @@ export function renderInvitationFrame(
 ) {
   const W = width;
   const H = height;
-  const scale = W / 720;
+  const isLandscape = W / H > 1.3;
+  const isSquare = Math.abs(W / H - 1) < 0.2;
+
+  // Compute adaptive scale so 9:16, 1:1, and 16:9 fit perfectly
+  let scale: number;
+  if (isLandscape) {
+    scale = (H / 1080) * 0.90;
+  } else if (isSquare) {
+    scale = (H / 1080) * 0.94;
+  } else {
+    scale = W / 720;
+  }
 
   // Clear canvas
   ctx.clearRect(0, 0, W, H);
@@ -201,7 +213,7 @@ function drawLuminousPedestal(
   scale: number,
   alpha: number
 ) {
-  const cardW = W * 0.86;
+  const cardW = Math.min(W * 0.86, 620 * scale);
   const cardX = (W - cardW) * 0.5;
 
   ctx.save();
@@ -228,6 +240,12 @@ function drawLuminousPedestal(
   ctx.restore();
 }
 
+function getYCenterOffset(W: number, H: number, scale: number, refCenter = 510) {
+  const isLandscape = W / H > 1.3;
+  const isSquare = Math.abs(W / H - 1) < 0.2;
+  return isLandscape || isSquare ? H * 0.5 - refCenter * scale : 0;
+}
+
 /**
  * Scene 1: The Host Families
  */
@@ -243,8 +261,9 @@ function renderScene1Families(
   const fadeIn = Math.min(1, localT / 0.6);
   const fadeOut = localT > 4.3 ? Math.max(0, 1 - (localT - 4.3) / 0.7) : 1;
   const baseAlpha = fadeIn * fadeOut;
+  const yOff = getYCenterOffset(W, H, scale, 510);
 
-  drawLuminousPedestal(ctx, W, 290 * scale, 470 * scale, scale, baseAlpha);
+  drawLuminousPedestal(ctx, W, 290 * scale + yOff, 470 * scale, scale, baseAlpha);
 
   ctx.save();
   ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
@@ -257,14 +276,14 @@ function renderScene1Families(
   ctx.font = `700 ${20 * scale}px 'Cinzel', serif`;
   ctx.letterSpacing = `${4 * scale}px`;
   ctx.fillStyle = "#694d22";
-  ctx.fillText(data.familyIntro, W * 0.5, (345 + s1.yOffset) * scale);
+  ctx.fillText(data.familyIntro, W * 0.5, (345 + s1.yOffset) * scale + yOff);
 
   // Divider line
   ctx.strokeStyle = "#c5a059";
   ctx.lineWidth = 1.5 * scale;
   ctx.beginPath();
-  ctx.moveTo(W * 0.5 - 55 * scale, (370 + s1.yOffset) * scale);
-  ctx.lineTo(W * 0.5 + 55 * scale, (370 + s1.yOffset) * scale);
+  ctx.moveTo(W * 0.5 - 55 * scale, (370 + s1.yOffset) * scale + yOff);
+  ctx.lineTo(W * 0.5 + 55 * scale, (370 + s1.yOffset) * scale + yOff);
   ctx.stroke();
 
   // 2. Late father
@@ -272,35 +291,35 @@ function renderScene1Families(
   ctx.globalAlpha = baseAlpha * s2.alpha;
   ctx.font = `italic 700 ${34 * scale}px 'Cormorant Garamond', serif`;
   ctx.fillStyle = "#140e08";
-  ctx.fillText(data.familyLateFather, W * 0.5, (430 + s2.yOffset) * scale);
+  ctx.fillText(data.familyLateFather, W * 0.5, (430 + s2.yOffset) * scale + yOff);
 
   // 3. AND
   const s3 = getStagger(localT, 0.35);
   ctx.globalAlpha = baseAlpha * s3.alpha;
   ctx.font = `700 ${20 * scale}px 'Cinzel', serif`;
   ctx.fillStyle = "#8c672b";
-  ctx.fillText("AND", W * 0.5, (485 + s3.yOffset) * scale);
+  ctx.fillText("AND", W * 0.5, (485 + s3.yOffset) * scale + yOff);
 
   // 4. Second father
   const s4 = getStagger(localT, 0.5);
   ctx.globalAlpha = baseAlpha * s4.alpha;
   ctx.font = `italic 700 ${34 * scale}px 'Cormorant Garamond', serif`;
   ctx.fillStyle = "#140e08";
-  ctx.fillText(data.familySecondFather, W * 0.5, (545 + s4.yOffset) * scale);
+  ctx.fillText(data.familySecondFather, W * 0.5, (545 + s4.yOffset) * scale + yOff);
 
   // 5. Invitation phrase
   const s5 = getStagger(localT, 0.65);
   ctx.globalAlpha = baseAlpha * s5.alpha;
   ctx.font = `italic ${28 * scale}px 'Cormorant Garamond', serif`;
   ctx.fillStyle = "#785721";
-  ctx.fillText(data.invitationPhrase, W * 0.5, (615 + s5.yOffset) * scale);
+  ctx.fillText(data.invitationPhrase, W * 0.5, (615 + s5.yOffset) * scale + yOff);
 
   // 6. Event title preview
   const s6 = getStagger(localT, 0.8);
   ctx.globalAlpha = baseAlpha * s6.alpha;
   ctx.font = `700 ${50 * scale}px 'Alex Brush', cursive`;
   ctx.fillStyle = "#b58735";
-  ctx.fillText(data.eventHeading, W * 0.5, (695 + s6.yOffset) * scale);
+  ctx.fillText(data.eventHeading, W * 0.5, (695 + s6.yOffset) * scale + yOff);
 
   ctx.restore();
 }
@@ -320,8 +339,9 @@ function renderScene2Couple(
   const fadeIn = Math.min(1, localT / 0.6);
   const fadeOut = localT > 4.7 ? Math.max(0, 1 - (localT - 4.7) / 0.7) : 1;
   const baseAlpha = fadeIn * fadeOut;
+  const yOff = getYCenterOffset(W, H, scale, 510);
 
-  drawLuminousPedestal(ctx, W, 260 * scale, 500 * scale, scale, baseAlpha);
+  drawLuminousPedestal(ctx, W, 260 * scale + yOff, 500 * scale, scale, baseAlpha);
 
   ctx.save();
   ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
@@ -333,7 +353,7 @@ function renderScene2Couple(
   ctx.globalAlpha = baseAlpha * s1.alpha;
   ctx.font = `700 ${68 * scale}px 'Alex Brush', cursive`;
   ctx.fillStyle = "#b58735";
-  ctx.fillText(data.eventHeading, W * 0.5, (335 + s1.yOffset) * scale);
+  ctx.fillText(data.eventHeading, W * 0.5, (335 + s1.yOffset) * scale + yOff);
 
   // 2. "of their beloved children"
   const s2 = getStagger(localT, 0.2);
@@ -341,19 +361,19 @@ function renderScene2Couple(
   ctx.font = `700 ${18 * scale}px 'Cinzel', serif`;
   ctx.letterSpacing = `${3.5 * scale}px`;
   ctx.fillStyle = "#6b522b";
-  ctx.fillText(data.childrenPhrase, W * 0.5, (390 + s2.yOffset) * scale);
+  ctx.fillText(data.childrenPhrase, W * 0.5, (390 + s2.yOffset) * scale + yOff);
 
   // 3. Groom Name
   const s3 = getStagger(localT, 0.38);
   ctx.globalAlpha = baseAlpha * s3.alpha;
   ctx.font = `700 ${46 * scale}px 'Cormorant Garamond', serif`;
   ctx.fillStyle = "#120d07";
-  ctx.fillText(data.groomName, W * 0.5, (470 + s3.yOffset) * scale);
+  ctx.fillText(data.groomName, W * 0.5, (470 + s3.yOffset) * scale + yOff);
 
   if (data.groomNick) {
     ctx.font = `italic 600 ${24 * scale}px 'Cormorant Garamond', serif`;
     ctx.fillStyle = "#876226";
-    ctx.fillText(`(${data.groomNick})`, W * 0.5, (510 + s3.yOffset) * scale);
+    ctx.fillText(`(${data.groomNick})`, W * 0.5, (510 + s3.yOffset) * scale + yOff);
   }
 
   // 4. Ornamental "&"
@@ -361,27 +381,27 @@ function renderScene2Couple(
   ctx.globalAlpha = baseAlpha * s4.alpha;
   ctx.font = `italic 700 ${46 * scale}px 'Alex Brush', cursive`;
   ctx.fillStyle = "#b58735";
-  ctx.fillText("&", W * 0.5, (570 + s4.yOffset) * scale);
+  ctx.fillText("&", W * 0.5, (570 + s4.yOffset) * scale + yOff);
 
   // 5. Bride Name
   const s5 = getStagger(localT, 0.7);
   ctx.globalAlpha = baseAlpha * s5.alpha;
   ctx.font = `700 ${46 * scale}px 'Cormorant Garamond', serif`;
   ctx.fillStyle = "#120d07";
-  ctx.fillText(data.brideName, W * 0.5, (640 + s5.yOffset) * scale);
+  ctx.fillText(data.brideName, W * 0.5, (640 + s5.yOffset) * scale + yOff);
 
   if (data.brideNick) {
     ctx.font = `italic 600 ${24 * scale}px 'Cormorant Garamond', serif`;
     ctx.fillStyle = "#876226";
-    ctx.fillText(`(${data.brideNick})`, W * 0.5, (680 + s5.yOffset) * scale);
+    ctx.fillText(`(${data.brideNick})`, W * 0.5, (680 + s5.yOffset) * scale + yOff);
   }
 
   // Golden separator line
   ctx.strokeStyle = "#c5a059";
   ctx.lineWidth = 1.5 * scale;
   ctx.beginPath();
-  ctx.moveTo(W * 0.5 - 65 * scale, 725 * scale);
-  ctx.lineTo(W * 0.5 + 65 * scale, 725 * scale);
+  ctx.moveTo(W * 0.5 - 65 * scale, 725 * scale + yOff);
+  ctx.lineTo(W * 0.5 + 65 * scale, 725 * scale + yOff);
   ctx.stroke();
 
   ctx.restore();
@@ -402,8 +422,9 @@ function renderScene3Details(
   const fadeIn = Math.min(1, localT / 0.6);
   const fadeOut = localT > 4.3 ? Math.max(0, 1 - (localT - 4.3) / 0.7) : 1;
   const baseAlpha = fadeIn * fadeOut;
+  const yOff = getYCenterOffset(W, H, scale, 510);
 
-  drawLuminousPedestal(ctx, W, 270 * scale, 480 * scale, scale, baseAlpha);
+  drawLuminousPedestal(ctx, W, 270 * scale + yOff, 480 * scale, scale, baseAlpha);
 
   ctx.save();
   ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
@@ -416,22 +437,22 @@ function renderScene3Details(
   ctx.font = `700 ${20 * scale}px 'Cinzel', serif`;
   ctx.letterSpacing = `${4 * scale}px`;
   ctx.fillStyle = "#6b522b";
-  ctx.fillText("✦ DATE & TIME ✦", W * 0.5, (330 + s1.yOffset) * scale);
+  ctx.fillText("✦ DATE & TIME ✦", W * 0.5, (330 + s1.yOffset) * scale + yOff);
 
   // 2. Date banner
   const s2 = getStagger(localT, 0.2);
   ctx.globalAlpha = baseAlpha * s2.alpha;
   ctx.font = `700 ${32 * scale}px 'Cinzel', serif`;
   ctx.fillStyle = "#120d07";
-  ctx.fillText(data.eventDate.toUpperCase(), W * 0.5, (400 + s2.yOffset) * scale);
+  ctx.fillText(data.eventDate.toUpperCase(), W * 0.5, (400 + s2.yOffset) * scale + yOff);
 
   // 3. Time Pill
   const s3 = getStagger(localT, 0.35);
   ctx.globalAlpha = baseAlpha * s3.alpha;
-  const pillW = 260 * scale;
+  const pillW = Math.min(W * 0.75, 260 * scale);
   const pillH = 42 * scale;
   const pillX = (W - pillW) * 0.5;
-  const pillY = (435 + s3.yOffset) * scale;
+  const pillY = (435 + s3.yOffset) * scale + yOff;
   ctx.fillStyle = "rgba(249, 239, 224, 0.9)";
   ctx.strokeStyle = "#d6be96";
   ctx.lineWidth = 1.2 * scale;
@@ -450,21 +471,21 @@ function renderScene3Details(
   ctx.font = `700 ${19 * scale}px 'Cinzel', serif`;
   ctx.letterSpacing = `${3 * scale}px`;
   ctx.fillStyle = "#6b522b";
-  ctx.fillText("VENUE", W * 0.5, (535 + s4.yOffset) * scale);
+  ctx.fillText("VENUE", W * 0.5, (535 + s4.yOffset) * scale + yOff);
 
   // 5. Venue Address
   const s5 = getStagger(localT, 0.65);
   ctx.globalAlpha = baseAlpha * s5.alpha;
   ctx.font = `600 ${25 * scale}px 'Cormorant Garamond', serif`;
   ctx.fillStyle = "#1a130b";
-  wrapText(ctx, data.venueAddress, W * 0.5, (575 + s5.yOffset) * scale, W * 0.78, 34 * scale);
+  wrapText(ctx, data.venueAddress, W * 0.5, (575 + s5.yOffset) * scale + yOff, Math.min(W * 0.78, 540 * scale), 34 * scale);
 
   // 6. Reception note
   const s6 = getStagger(localT, 0.8);
   ctx.globalAlpha = baseAlpha * s6.alpha;
   ctx.font = `italic 700 ${26 * scale}px 'Cormorant Garamond', serif`;
   ctx.fillStyle = "#996e21";
-  ctx.fillText(`✨ ${data.receptionNote} ✨`, W * 0.5, (695 + s6.yOffset) * scale);
+  ctx.fillText(`✨ ${data.receptionNote} ✨`, W * 0.5, (695 + s6.yOffset) * scale + yOff);
 
   ctx.restore();
 }
@@ -483,8 +504,9 @@ function renderScene4Finale(
   const localT = t - 18.8;
   const fadeIn = Math.min(1, localT / 0.6);
   const baseAlpha = fadeIn;
+  const yOff = getYCenterOffset(W, H, scale, 510);
 
-  drawLuminousPedestal(ctx, W, 260 * scale, 500 * scale, scale, baseAlpha);
+  drawLuminousPedestal(ctx, W, 260 * scale + yOff, 500 * scale, scale, baseAlpha);
 
   ctx.save();
   ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
@@ -496,7 +518,7 @@ function renderScene4Finale(
   ctx.globalAlpha = baseAlpha * s1.alpha;
   ctx.font = `700 ${56 * scale}px 'Alex Brush', cursive`;
   ctx.fillStyle = "#b58735";
-  ctx.fillText("Kindly RSVP", W * 0.5, (330 + s1.yOffset) * scale);
+  ctx.fillText("Kindly RSVP", W * 0.5, (330 + s1.yOffset) * scale + yOff);
 
   // 2. RSVP Contacts Label
   const s2 = getStagger(localT, 0.2);
@@ -504,15 +526,15 @@ function renderScene4Finale(
   ctx.font = `700 ${18 * scale}px 'Cinzel', serif`;
   ctx.letterSpacing = `${3.5 * scale}px`;
   ctx.fillStyle = "#694e25";
-  ctx.fillText(data.rsvpLabel.toUpperCase(), W * 0.5, (380 + s2.yOffset) * scale);
+  ctx.fillText(data.rsvpLabel.toUpperCase(), W * 0.5, (380 + s2.yOffset) * scale + yOff);
 
   // 3. Contact Numbers Box
   const s3 = getStagger(localT, 0.38);
   ctx.globalAlpha = baseAlpha * s3.alpha;
-  const boxW = W * 0.74;
+  const boxW = Math.min(W * 0.74, 520 * scale);
   const boxH = (data.rsvpNumbers.length * 44 + 20) * scale;
   const boxX = (W - boxW) * 0.5;
-  const boxY = (410 + s3.yOffset) * scale;
+  const boxY = (410 + s3.yOffset) * scale + yOff;
 
   ctx.fillStyle = "rgba(251, 243, 230, 0.85)";
   ctx.strokeStyle = "#dbc6a4";
@@ -1084,8 +1106,18 @@ export async function exportInvitationVideo(
       ? 42.0
       : 24.0;
   const duration = options.duration || defaultDuration;
-  const width = options.width || 720;
-  const height = options.height || 1280;
+  const ratio = options.aspectRatio || data.aspectRatio || "9:16";
+  let defaultW = 720;
+  let defaultH = 1280;
+  if (ratio === "16:9") {
+    defaultW = 1280;
+    defaultH = 720;
+  } else if (ratio === "1:1") {
+    defaultW = 720;
+    defaultH = 720;
+  }
+  const width = options.width || defaultW;
+  const height = options.height || defaultH;
   const fps = options.fps || 30;
   const includeAudio = options.includeAudio !== false;
 
